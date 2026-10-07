@@ -26,10 +26,13 @@ export class UsersService {
   }
 
   async findById(
-    id: string,
-  ): Promise<UserDocument | null> {
-    return this.userModel.findById(id).exec();
-  }
+  id: string,
+): Promise<UserDocument | null> {
+  return this.userModel
+    .findById(id)
+    .select('+refreshToken')
+    .exec();
+}
 
   async create(
     data: Partial<User>,
