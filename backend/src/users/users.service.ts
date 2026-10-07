@@ -14,21 +14,27 @@ export class UsersService {
     private readonly userModel: Model<UserDocument>,
   ) {}
 
-  async findByEmail(email: string): Promise<UserDocument | null> {
+  async findByEmail(
+    email: string,
+  ): Promise<UserDocument | null> {
     return this.userModel
       .findOne({
         email: email.toLowerCase(),
       })
-      .select('+password +refreshTokenHash')
+      .select('+password +otp')
       .exec();
   }
 
-  async findById(id: string): Promise<UserDocument | null> {
+  async findById(
+    id: string,
+  ): Promise<UserDocument | null> {
     return this.userModel.findById(id).exec();
   }
 
-  async create(userData: Partial<User>): Promise<UserDocument> {
-    const user = new this.userModel(userData);
+  async create(
+    data: Partial<User>,
+  ): Promise<UserDocument> {
+    const user = new this.userModel(data);
 
     return user.save();
   }

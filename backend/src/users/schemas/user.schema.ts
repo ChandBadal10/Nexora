@@ -21,27 +21,35 @@ export enum UserStatus {
   timestamps: true,
 })
 export class User {
+  // User's full name
   @Prop({
+    type: String,
     required: true,
     trim: true,
   })
   name!: string;
 
+  // User's email
   @Prop({
+    type: String,
     required: true,
     unique: true,
     lowercase: true,
     trim: true,
-    index: true,
   })
   email!: string;
 
+  // Password
+  // It will be empty during registration
+  // and added after OTP verification
   @Prop({
-    required: true,
+    type: String,
+
     select: false,
   })
-  password!: string;
+  password?: string;
 
+  // User role
   @Prop({
     type: String,
     enum: UserRole,
@@ -49,6 +57,7 @@ export class User {
   })
   role!: UserRole;
 
+  // User account status
   @Prop({
     type: String,
     enum: UserStatus,
@@ -56,47 +65,49 @@ export class User {
   })
   status!: UserStatus;
 
+  // Whether email has been verified
   @Prop({
+    type: Boolean,
     default: false,
   })
   isEmailVerified!: boolean;
 
-  @Prop({
-    type: String,
-    default: null,
-  })
-  emailVerificationToken!: string | null;
-
-  @Prop({
-    type: Date,
-    default: null,
-  })
-  emailVerificationExpires!: Date | null;
-
-  @Prop({
-    type: String,
-    default: null,
-  })
-  passwordResetToken!: string | null;
-
-  @Prop({
-    type: Date,
-    default: null,
-  })
-  passwordResetExpires!: Date | null;
-
+  // Hashed OTP
   @Prop({
     type: String,
     default: null,
     select: false,
   })
-  refreshTokenHash!: string | null;
+  otp?: string;
 
+  // OTP expiry time
   @Prop({
     type: Date,
     default: null,
   })
-  lastLoginAt!: Date | null;
+  otpExpiresAt?: Date;
+
+  // Number of incorrect OTP attempts
+  @Prop({
+    type: Number,
+    default: 0,
+  })
+  otpAttempts!: number;
+
+  // Hashed refresh token
+  @Prop({
+    type: String,
+    default: null,
+    select: false,
+  })
+  refreshToken?: string;
+
+  // Last successful login time
+  @Prop({
+    type: Date,
+    default: null,
+  })
+  lastLoginAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

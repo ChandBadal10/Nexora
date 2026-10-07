@@ -12,7 +12,7 @@ import { User, UserSchema } from './schemas/user.schema';
       }
     ])
   ],
+  providers: [UsersService],
   exports: [UsersService],
-  providers: [UsersService]
 })
 export class UsersModule {}
