@@ -21,12 +21,14 @@ import { SetPasswordDto } from './dto/set-password.dto';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { Response } from 'express';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   // REGISTER
@@ -80,10 +82,7 @@ export class AuthService {
       otpAttempts: 0,
     });
 
-    // Temporary OTP for testing
-    console.log(
-      `OTP for ${email}: ${otp}`,
-    );
+    await this.emailService.sendOtpEmail(email,name,otp)
 
     return {
       message:
@@ -300,5 +299,106 @@ export class AuthService {
       }
     }
   }
+
+
+
+  //refresh token
+  async refresh(
+  refreshToken: string,
+) {
+  if (!refreshToken) {
+    throw new UnauthorizedException(
+      'Refresh token not found',
+    );
+  }
+
+  let payload: {
+    sub: string;
+  };
+
+  try {
+    payload =
+      await this.jwtService.verifyAsync(
+        refreshToken,
+        {
+          secret:
+            process.env.JWT_REFRESH_SECRET,
+        },
+      );
+  } catch {
+    throw new UnauthorizedException(
+      'Invalid or expired refresh token',
+    );
+  }
+
+  const user =
+    await this.usersService.findById(
+      payload.sub,
+    );
+
+  if (!user || !user.refreshToken) {
+    throw new UnauthorizedException(
+      'Invalid refresh token',
+    );
+  }
+
+  const isValid =
+    await bcrypt.compare(
+      refreshToken,
+      user.refreshToken,
+    );
+
+  if (!isValid) {
+    throw new UnauthorizedException(
+      'Invalid refresh token',
+    );
+  }
+
+  const accessToken =
+    await this.jwtService.signAsync(
+      {
+        sub: user._id.toString(),
+        email: user.email,
+        role: user.role,
+      },
+      {
+        secret:
+          process.env.JWT_ACCESS_SECRET,
+        expiresIn: '15m',
+      },
+    );
+
+  return {
+    message:
+      'Access token refreshed successfully',
+    accessToken,
+  };
+}
+
+  async logout(
+  userId: string,
+  response: Response,
+) {
+  const user =
+    await this.usersService.findById(userId);
+
+  if (user) {
+    user.refreshToken = undefined;
+    await user.save();
+  }
+
+  response.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite:
+      process.env.NODE_ENV === 'production'
+        ? 'none'
+        : 'lax',
+  });
+
+  return {
+    message: 'Logout successful',
+  };
+}
 
 }
