@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 import * as bcrypt from 'bcrypt';
@@ -16,11 +17,16 @@ import { UsersService } from '../users/users.service';
 
 import { RegisterDto } from './dto/register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
+import { JwtService } from '@nestjs/jwt';
+import { LoginDto } from './dto/login.dto';
+import { Response } from 'express';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
   // REGISTER
@@ -180,4 +186,119 @@ export class AuthService {
       },
     };
   }
+
+
+  //Set Password
+  async setPassword(setPasswordDto: SetPasswordDto) {
+    const email = setPasswordDto.email.trim().toLowerCase();
+
+    const password = setPasswordDto.password;
+
+    //find user
+    const user = await this.usersService.findByEmail(email);
+    if(!user) {
+      throw new BadRequestException("User not found");
+    }
+
+    //Email must be verified first
+    if(!user.isEmailVerified) {
+      throw new BadRequestException("Please verify your email");
+    }
+
+    //check if password is already set
+    if(user.password) {
+      throw new BadRequestException("Password is already set")
+    }
+
+    //hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    //Save Password
+    user.password = hashedPassword;
+
+    await user.save();
+
+    return {
+      message: "Password set successfully"
+    }
+  }
+
+
+  //Login
+  async login(loginDto: LoginDto, response: Response) {
+    const email = loginDto.email.trim().toLowerCase();
+
+    const password = loginDto.password;
+
+    //Find user
+    const user = await this.usersService.findByEmail(email);
+
+    if(!user) {
+      throw new UnauthorizedException("Invalid email or password");
+    }
+
+    //check email verification
+    if(!user.isEmailVerified) {
+      throw new UnauthorizedException("Please verify your email first");
+    }
+
+    //Check password
+    if(!user.password) {
+      throw new UnauthorizedException("Please set your password first");
+    }
+
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+
+    if(!isPasswordCorrect) {
+      throw new UnauthorizedException("Invalid email or password")
+    }
+
+    //create access token
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: user._id.toString(),
+        email: user.email,
+        role: user.role,
+      },
+      {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: "15m",
+      }
+    );
+
+    //create refresh token
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        sub: user._id.toString(),
+      },
+      {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: "7d",
+      }
+    );
+
+    response.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", maxAge: 7 * 24 * 60 * 60 * 1000,
+    })
+
+    //save refresh token
+    user.refreshToken = await bcrypt.hash(refreshToken, 10);
+    user.lastLoginAt = new Date();
+
+    await user.save();
+
+    return {
+      message: "Login successful",
+      accessToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    }
+  }
+
 }
